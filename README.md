@@ -46,13 +46,11 @@ Diablo-Powerleveling/
 ├── calculator.js       # Calculator logic and UI interactions
 ├── diabloData.js       # Level data for D4 and D2R
 ├── diablo.css          # Custom styling (dark theme with neon green accents)
-├── random-sig.html     # Random signature GIF redirector
 ├── icon.ico            # Diablo game icon
-├── *.gif               # Signature GIF files
-└── src/                # TypeScript components (appears to be unused/legacy)
-    ├── components/
-    │   ├── Calculator.tsx
-    │   └── GameSelector.tsx
-    └── data/
-        └── gameData.ts
+├── random-sig.html     # Random signature GIF redirector (used with Cloudflare Workers for d2jsp)
+└── *.gif               # Signature GIF files (used with random-sig.html for d2jsp account)
 ```
+
+## Additional Files
+
+- **`random-sig.html`** and **GIF files**: Used separately with Cloudflare Workers to provide a random signature GIF selector for d2jsp forum account signatures. These are not part of the main calculator functionality but are hosted in the same repository.
