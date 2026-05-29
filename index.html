@@ -80,36 +80,26 @@
                   </label>
                 </div>
                 <div class="s12 m6">
-                  <div
-                    id="partySizeContainer"
-                    class="field small"
-                    style="display: none; margin-left: 10px"
-                  >
-                    <select id="partySize" class="border">
-                      <option value="1">Party Size: 1</option>
-                      <option value="2" selected>Party Size: 2</option>
-                      <option value="3">Party Size: 3</option>
-                      <option value="4">Party Size: 4</option>
-                      <option value="5">Party Size: 5</option>
-                      <option value="6">Party Size: 6</option>
-                      <option value="7">Party Size: 7</option>
-                      <option value="8">Party Size: 8</option>
-                    </select>
-                  </div>
-                  <div
-                    id="d2rBonusContainer"
-                    class="field small"
-                    style="display: none; margin-left: 10px"
-                  >
-                    <select id="anniBonus" class="border">
-                      <option value="0">Anni: None</option>
-                      <option value="5">Anni: 5%</option>
-                      <option value="6">Anni: 6%</option>
-                      <option value="7">Anni: 7%</option>
-                      <option value="8">Anni: 8%</option>
-                      <option value="9">Anni: 9%</option>
-                      <option value="10">Anni: 10%</option>
-                    </select>
+                  <div id="d2rBonusContainer" style="display: none">
+                    <div class="field small" style="min-width: 140px; margin: 0">
+                      <select id="anniBonus" class="border">
+                        <option value="0">Anni: None</option>
+                        <option value="5">Anni: 5%</option>
+                        <option value="6">Anni: 6%</option>
+                        <option value="7">Anni: 7%</option>
+                        <option value="8">Anni: 8%</option>
+                        <option value="9">Anni: 9%</option>
+                        <option value="10">Anni: 10%</option>
+                      </select>
+                    </div>
+                    <div class="field small" style="min-width: 155px; margin: 0">
+                      <select id="ancJewelBonus" class="border">
+                        <option value="0">Anc Jewel: None</option>
+                        <option value="3">Anc Jewel: 3%</option>
+                        <option value="4">Anc Jewel: 4%</option>
+                        <option value="5">Anc Jewel: 5%</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
                 <div
@@ -209,6 +199,100 @@
             </tr>
           </tbody>
         </table>
+
+        <!-- Live API: Player Level Inputs (nur D2R) -->
+         
+        <div id="playerLevelsContainer" class="card" style="display: none; margin-top: 8px;">
+          <details id="playerLevelsDetails">
+            <summary style="cursor: pointer; user-select: none; padding: 4px 0; font-size: 0.9em; font-weight: 500;">
+              ⚡ Live EXP via Google Sheets &ndash; Settings &amp; Player Levels
+            </summary>
+            <!-- Live API Settings: Party Size & Players in Game -->
+            <div class="row" style="margin-top: 12px; gap: 12px; flex-wrap: wrap;">
+              <div id="partySizeContainer" class="field small" style="min-width: 140px; margin: 0;">
+                <select id="partySize" class="border">
+                  <option value="1">Party Size: 1</option>
+                  <option value="2" selected>Party Size: 2</option>
+                  <option value="3">Party Size: 3</option>
+                  <option value="4">Party Size: 4</option>
+                  <option value="5">Party Size: 5</option>
+                  <option value="6">Party Size: 6</option>
+                  <option value="7">Party Size: 7</option>
+                  <option value="8">Party Size: 8</option>
+                </select>
+              </div>
+              <div class="field small" style="min-width: 165px; margin: 0;">
+                <select id="playersInGame" class="border">
+                  <option value="1">Players in Game: 1</option>
+                  <option value="2">Players in Game: 2</option>
+                  <option value="3">Players in Game: 3</option>
+                  <option value="4">Players in Game: 4</option>
+                  <option value="5">Players in Game: 5</option>
+                  <option value="6">Players in Game: 6</option>
+                  <option value="7">Players in Game: 7</option>
+                  <option value="8" selected>Players in Game: 8</option>
+                </select>
+              </div>
+              <div class="field small" style="min-width: 180px; margin: 0">
+                <select id="liveExpLocation" class="border" title="Welche Area im Sheet ausgelesen wird">
+                  <option value="chaos" selected>Chaos Sanctuary</option>
+                  <option value="tal">Tal Rasha's Tombs</option>
+                </select>
+              </div>
+            </div>
+            <div class="row" style="margin-top: 12px; gap: 6px; flex-wrap: wrap;">
+              <div class="field label border small" style="min-width: 100px; flex: 1;">
+                <input id="p2Level" type="number" min="1" max="99" value="60" />
+                <label for="p2Level">Player 2 Lvl</label>
+              </div>
+              <div class="field label border small" style="min-width: 100px; flex: 1;">
+                <input id="p3Level" type="number" min="1" max="99" value="60" />
+                <label for="p3Level">Player 3 Lvl</label>
+              </div>
+              <div class="field label border small" style="min-width: 100px; flex: 1;">
+                <input id="p4Level" type="number" min="1" max="99" value="60" />
+                <label for="p4Level">Player 4 Lvl</label>
+              </div>
+              <div class="field label border small" style="min-width: 100px; flex: 1;">
+                <input id="p5Level" type="number" min="1" max="99" value="60" />
+                <label for="p5Level">Player 5 Lvl</label>
+              </div>
+              <div class="field label border small" style="min-width: 100px; flex: 1;">
+                <input id="p6Level" type="number" min="1" max="99" value="60" />
+                <label for="p6Level">Player 6 Lvl</label>
+              </div>
+              <div class="field label border small" style="min-width: 100px; flex: 1;">
+                <input id="p7Level" type="number" min="1" max="99" value="90" />
+                <label for="p7Level">Player 7 Lvl</label>
+              </div>
+              <div class="field label border small" style="min-width: 100px; flex: 1;">
+                <input id="p8Level" type="number" min="1" max="99" value="99" />
+                <label for="p8Level">Player 8 Lvl</label>
+              </div>
+            </div>
+            <div class="row" style="margin-top: 12px; gap: 8px; flex-wrap: wrap; align-items: center">
+              <div class="field label border small" style="min-width: 88px; margin: 0">
+                <input id="liveExpFromLevel" type="number" min="1" max="98" placeholder=" " />
+                <label for="liveExpFromLevel">EXP Von</label>
+              </div>
+              <div class="field label border small" style="min-width: 88px; margin: 0">
+                <input id="liveExpToLevel" type="number" min="2" max="99" placeholder=" " />
+                <label for="liveExpToLevel">EXP Bis</label>
+              </div>
+              <span style="font-size: 0.8em; opacity: 0.7; max-width: 220px"
+                >Leer = alle Tabellenzeilen. Nur diese Range wird aus dem Sheet gelesen (C4 wird danach zurückgesetzt).</span
+              >
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+              <button id="fetchLiveExpBtn" class="border small" title="Holt live EXP-Werte aus deinem Google Sheet">
+                <i>sync</i>
+                <span>Live EXP laden</span>
+              </button>
+              <span id="liveExpStatus" style="font-size: 0.85em; opacity: 0.75;"></span>
+            </div>
+          </details>
+        </div>
+
       </article>
     </main>
 

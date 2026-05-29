@@ -1,3 +1,12 @@
+// ─── Google Apps Script URL ────────────────────────────────────────────────
+// Füge hier deine Web-App-URL ein, nachdem du das Script deployed hast.
+// Beispiel: 'https://script.google.com/macros/s/AKfycb.../exec'
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbwtmEOM2kOdjl3Gb-7TCdqxJV48QXs6NwBnzsLBp2VLaxzKtrtzBvIROYeWltQgVCMwJQ/exec";
+
+// Gecachte Live-EXP-Daten vom Google Sheet (überschreiben d2rLevelExpData)
+let liveExpData = null;
+
 // Define defaults in one place
 const DEFAULT_VALUES = {
   d4: { exp: "15000000", time: "5", cost: "200" },
@@ -19,7 +28,7 @@ let d4Rows = ["1-60", "1-100", "1-150"];
 let d2rRows = D2R_DEFAULT_ROWS.partySizeGreaterThan1;
 
 // Add at the top with other state variables
-let previousD2RRows = ["1-60", "1-70", "1-80", "1-90"]; // Store previous D2R rows
+let previousD2RRows = ["1-60", "1-70", "1-80", "1-99"]; // Store previous D2R rows
 
 function createRowElement(levelRange = "", isFirstRow = false) {
   const row = document.createElement("tr");
@@ -196,8 +205,8 @@ function updatePresetValues(isD4, useDefaults = false) {
       ? DEFAULT_VALUES.d4
       : DEFAULT_VALUES.d2r
     : isD4
-    ? d4Values
-    : d2rValues;
+      ? d4Values
+      : d2rValues;
 
   // Update all fields at once
   Object.entries(fields).forEach(([key, field]) => {
@@ -220,16 +229,21 @@ function initializeGameElements(isD4) {
   const partySizeContainer = document.getElementById("partySizeContainer");
   const d2rBonusContainer = document.getElementById("d2rBonusContainer");
   const d2rCheckboxContainer = document.getElementById("d2rCheckboxContainer");
+  const playerLevelsContainer = document.getElementById(
+    "playerLevelsContainer",
+  );
 
   if (!isD4) {
     // Show D2R specific elements
     partySizeContainer.style.display = "inline-block";
-    d2rBonusContainer.style.display = "inline-block";
+    d2rBonusContainer.style.display = "inline-flex";
     d2rCheckboxContainer.style.display = "flex";
+    if (playerLevelsContainer) playerLevelsContainer.style.display = "block";
 
     // Set default D2R values
     document.getElementById("partySize").value = "2";
     document.getElementById("anniBonus").value = "0";
+    document.getElementById("ancJewelBonus").value = "0";
     document.getElementById("expShrine").checked = false;
     document.getElementById("ondalsWisdom").checked = false;
   } else {
@@ -237,6 +251,7 @@ function initializeGameElements(isD4) {
     partySizeContainer.style.display = "none";
     d2rBonusContainer.style.display = "none";
     d2rCheckboxContainer.style.display = "none";
+    if (playerLevelsContainer) playerLevelsContainer.style.display = "none";
   }
 }
 
@@ -301,6 +316,11 @@ function setupInputListeners() {
       const tbody = document.querySelector("tbody");
       if (!tbody) return;
 
+      // Players in Game muss >= Party Size sein
+      enforcePlayers();
+
+      invalidateLiveExp("⚠️ Party Size geändert – bitte Live EXP neu laden.");
+
       // Clear existing rows
       tbody.innerHTML = "";
 
@@ -320,8 +340,20 @@ function setupInputListeners() {
       saveStateToHash();
     },
     anniBonus: () => calculate(),
+    ancJewelBonus: () => calculate(),
     expShrine: () => calculate(),
     ondalsWisdom: () => calculate(),
+    playersInGame: () => {
+      enforcePlayers();
+      invalidateLiveExp(
+        "⚠️ Players in Game geändert – bitte Live EXP neu laden.",
+      );
+      calculate();
+    },
+    liveExpLocation: () => {
+      invalidateLiveExp("⚠️ Area geändert – bitte Live EXP neu laden.");
+      calculate();
+    },
   };
 
   Object.entries(d2rInputs).forEach(([id, handler]) => {
@@ -344,6 +376,212 @@ function setupButtonListeners() {
       const shareableUrl = `${window.location.origin}${window.location.pathname}#share=${shareableHash}`;
       await navigator.clipboard.writeText(shareableUrl);
     });
+  }
+
+  // Live EXP fetch button
+  const fetchBtn = document.getElementById("fetchLiveExpBtn");
+  if (fetchBtn) {
+    fetchBtn.addEventListener("click", () => fetchLiveExpFromSheet());
+  }
+}
+
+/**
+ * Live-EXP-Cache leeren und Hinweis anzeigen.
+ */
+function invalidateLiveExp(message) {
+  if (liveExpData === null) return;
+  liveExpData = null;
+  const statusEl = document.getElementById("liveExpStatus");
+  if (statusEl && message) statusEl.textContent = message;
+}
+
+/**
+ * Erzwingt: Players in Game >= Party Size.
+ * Wird bei jeder Änderung von partySize oder playersInGame aufgerufen.
+ */
+function enforcePlayers() {
+  const pigEl = document.getElementById("playersInGame");
+  const psEl = document.getElementById("partySize");
+  if (!pigEl || !psEl) return;
+  const ps = parseInt(psEl.value) || 1;
+  const pig = parseInt(pigEl.value) || 8;
+  if (pig < ps) pigEl.value = ps;
+}
+
+/**
+ * Level-Range für Live-EXP: optional EXP Von/Bis, sonst Vereinigung aller Tabellenzeilen.
+ */
+function getLiveExpFetchRange() {
+  const explicitFrom = parseInt(
+    document.getElementById("liveExpFromLevel")?.value,
+    10,
+  );
+  const explicitTo = parseInt(
+    document.getElementById("liveExpToLevel")?.value,
+    10,
+  );
+  if (
+    Number.isFinite(explicitFrom) &&
+    Number.isFinite(explicitTo) &&
+    explicitFrom >= 1 &&
+    explicitTo <= 99 &&
+    explicitFrom < explicitTo
+  ) {
+    return { fromLevel: explicitFrom, toLevel: explicitTo, source: "explicit" };
+  }
+
+  let fromLevel = Infinity;
+  let toLevel = -Infinity;
+  let hasRow = false;
+
+  document.querySelectorAll("tbody tr").forEach((row) => {
+    const val = row.querySelector(".powerleveling")?.value?.trim();
+    if (!val) return;
+    const validation = validateLevelRange(val, false);
+    if (!validation.valid) return;
+    hasRow = true;
+    fromLevel = Math.min(fromLevel, validation.from);
+    toLevel = Math.max(toLevel, validation.to);
+  });
+
+  if (!hasRow || !Number.isFinite(fromLevel) || fromLevel >= toLevel) {
+    throw new Error(
+      "Keine gültige Level-Range – Tabelle ausfüllen oder EXP Von/Bis angeben (z. B. 60 und 65).",
+    );
+  }
+
+  return { fromLevel, toLevel, source: "table" };
+}
+
+/**
+ * Holt live EXP-Werte aus dem Google Sheet via Apps Script.
+ * Fixes:
+ *   1. Button wird sofort beim Klick deaktiviert (verhindert Mehrfachklicks)
+ *   2. Jeder Request bekommt eine eindeutige ID (verhindert Google-Duplikate)
+ *   3. AbortController mit 35s Timeout (verhindert endlose Wartezeit)
+ */
+async function fetchLiveExpFromSheet() {
+  const statusEl = document.getElementById("liveExpStatus");
+  const fetchBtn = document.getElementById("fetchLiveExpBtn");
+
+  // ── Fix 1: Button SOFORT sperren, vor allem anderen ──────────────────────
+  if (fetchBtn) fetchBtn.disabled = true;
+
+  if (!APPS_SCRIPT_URL) {
+    if (statusEl)
+      statusEl.textContent =
+        "⚠️ Bitte APPS_SCRIPT_URL in calculator.js eintragen!";
+    if (fetchBtn) fetchBtn.disabled = false;
+    return;
+  }
+
+  let fromLevel;
+  let toLevel;
+  let rangeSource;
+  try {
+    ({ fromLevel, toLevel, source: rangeSource } = getLiveExpFetchRange());
+  } catch (err) {
+    if (statusEl) statusEl.textContent = `⚠️ ${err.message}`;
+    if (fetchBtn) fetchBtn.disabled = false;
+    return;
+  }
+
+  const levelCount = toLevel - fromLevel;
+  if (levelCount > 15 && rangeSource === "table") {
+    const ok = confirm(
+      `Es werden Level ${fromLevel}–${toLevel - 1} geladen (${levelCount} Werte, aus allen Tabellenzeilen).\n\n` +
+        `Im Sheet wird C4 kurz nacheinander geändert (danach automatisch zurückgesetzt).\n\n` +
+        `Nur 60–65 gewünscht? Zeilen anpassen oder „EXP Von/Bis" setzen.\n\nFortfahren?`,
+    );
+    if (!ok) {
+      if (fetchBtn) fetchBtn.disabled = false;
+      return;
+    }
+  }
+
+  if (statusEl)
+    statusEl.textContent = `⏳ Lade Level ${fromLevel}–${toLevel - 1} (ca. ${levelCount * 9}s)…`;
+
+  try {
+    const partySize =
+      parseInt(document.getElementById("partySize")?.value) || 2;
+    const playersInGame = Math.max(
+      parseInt(document.getElementById("playersInGame")?.value) || 8,
+      partySize,
+    );
+    const location =
+      document.getElementById("liveExpLocation")?.value || "chaos";
+    const p2 = parseInt(document.getElementById("p2Level")?.value) || 60;
+    const p3 = parseInt(document.getElementById("p3Level")?.value) || 60;
+    const p4 = parseInt(document.getElementById("p4Level")?.value) || 60;
+    const p5 = parseInt(document.getElementById("p5Level")?.value) || 60;
+    const p6 = parseInt(document.getElementById("p6Level")?.value) || 60;
+    const p7 = parseInt(document.getElementById("p7Level")?.value) || 90;
+    const p8 = parseInt(document.getElementById("p8Level")?.value) || 90;
+
+    const url = new URL(APPS_SCRIPT_URL);
+    url.searchParams.set("fromLevel", fromLevel);
+    url.searchParams.set("toLevel", toLevel);
+    url.searchParams.set("partySize", partySize);
+    url.searchParams.set("playersInGame", playersInGame);
+    url.searchParams.set("location", location);
+    url.searchParams.set("p2", p2);
+    url.searchParams.set("p3", p3);
+    url.searchParams.set("p4", p4);
+    url.searchParams.set("p5", p5);
+    url.searchParams.set("p6", p6);
+    url.searchParams.set("p7", p7);
+    url.searchParams.set("p8", p8);
+
+    // ── Fix 2: Eindeutige Request-ID gegen Google-Duplikate ───────────────
+    url.searchParams.set("requestId", crypto.randomUUID());
+
+    // ── Fix 3: AbortController – Timeout = levelCount * 12s + 10s Puffer ──
+    const timeoutMs = levelCount * 12000 + 10000;
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response;
+    try {
+      response = await fetch(url.toString(), { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const json = await response.json();
+
+    // Duplikat-Request wurde vom Script abgewiesen – kein Fehler für den User
+    if (json.duplicate) {
+      if (statusEl)
+        statusEl.textContent =
+          "⚠️ Duplikat-Request abgewiesen – bitte nochmal versuchen.";
+      return;
+    }
+
+    if (!json.success) throw new Error(json.error || "Unbekannter Fehler");
+
+    if (!json.data || Object.keys(json.data).length === 0) {
+      throw new Error("Keine EXP-Daten vom Sheet erhalten");
+    }
+    liveExpData = { ...(liveExpData || {}), ...json.data };
+    calculate();
+
+    const areaLabel =
+      location === "tal" ? "Canyon and Tal Rashas Tombs" : "Chaos Sanctuary";
+    if (statusEl)
+      statusEl.textContent = `✅ ${areaLabel}, Level ${fromLevel}–${toLevel - 1}, Party ${partySize}, ${playersInGame} Spieler – Boni im Rechner (${new Date().toLocaleTimeString()})`;
+  } catch (err) {
+    console.error("fetchLiveExpFromSheet:", err);
+    if (err.name === "AbortError") {
+      if (statusEl)
+        statusEl.textContent = `❌ Timeout nach ${Math.round(levelCount * 12 + 10)}s – Range verkleinern oder EXP Von/Bis nutzen.`;
+    } else {
+      if (statusEl) statusEl.textContent = `❌ Fehler: ${err.message}`;
+    }
+  } finally {
+    if (fetchBtn) fetchBtn.disabled = false;
   }
 }
 
@@ -423,35 +661,65 @@ function validateLevelRange(levelRange, isD4) {
   };
 }
 
+/**
+ * Summe aller EXP-Boni in % (nur UI – Live-Sheet liefert Basis-EXP ohne diese).
+ * Shrine: alle Level; Ondal's ab 66; Anni + Anc Jewel ab 70.
+ */
+function getD2RExpBonusPercent(level) {
+  const expShrineBonus = document.getElementById("expShrine")?.checked ? 50 : 0;
+  const anniBonus =
+    parseInt(document.getElementById("anniBonus")?.value, 10) || 0;
+  const ancJewelBonus =
+    parseInt(document.getElementById("ancJewelBonus")?.value, 10) || 0;
+  const ondalsBonus = document.getElementById("ondalsWisdom")?.checked ? 5 : 0;
+
+  let bonus = expShrineBonus;
+  if (level >= 70 && anniBonus > 0) bonus += anniBonus;
+  if (level >= 75 && ancJewelBonus > 0) bonus += ancJewelBonus;
+  if (level >= 66 && ondalsBonus > 0) bonus += ondalsBonus;
+  return bonus;
+}
+
+/** Basis-EXP pro Run aus Live- oder Fallback-Daten (ohne Anni/Anc/Shrine/Ondal's). */
+function getD2RBaseExpPerRun(expSource, level, partySize) {
+  if (!expSource) return 0;
+  const levelEntry = expSource[level] ?? expSource[String(level)];
+  if (!levelEntry) return 0;
+  const raw = levelEntry[partySize] ?? levelEntry[String(partySize)];
+  const base = Number(raw);
+  return Number.isFinite(base) ? base : 0;
+}
+
+/** Wendet UI-Boni auf Sheet-/Fallback-Basis-EXP an (immer, auch bei Live-Daten). */
+function applyD2RExpBonuses(baseExpPerRun, level) {
+  if (!baseExpPerRun) return 0;
+  const bonusPercent = getD2RExpBonusPercent(level);
+  if (bonusPercent <= 0) return baseExpPerRun;
+  return baseExpPerRun * (1 + bonusPercent / 100);
+}
+
 function calculateD2RExperience(from, to, partySize) {
   let totalRuns = 0;
   let currentLevel = from;
 
-  // Get bonus values
-  const expShrineBonus = document.getElementById("expShrine").checked ? 50 : 0;
-  const anniBonus = parseInt(document.getElementById("anniBonus").value) || 0;
-  const ondalsBonus = document.getElementById("ondalsWisdom").checked ? 5 : 0;
+  const expSource = liveExpData || d2rLevelExpData;
 
   while (currentLevel < to) {
     const currentLevelData = D2RlevelData[currentLevel - 1];
     const nextLevelData = D2RlevelData[currentLevel];
     const expNeededForNextLevel = nextLevelData[2] - currentLevelData[2];
-    const baseExpPerRun = d2rLevelExpData[currentLevel][partySize];
 
-    // Calculate total bonus
-    let currentExpBonus = expShrineBonus;
-    if (currentLevel >= 70 && anniBonus > 0) {
-      currentExpBonus += anniBonus;
+    const baseExpPerRun = getD2RBaseExpPerRun(
+      expSource,
+      currentLevel,
+      partySize,
+    );
+    if (baseExpPerRun === 0) {
+      currentLevel++;
+      continue;
     }
-    if (currentLevel >= 66 && ondalsBonus > 0) {
-      currentExpBonus += ondalsBonus;
-    }
 
-    const expPerRun =
-      currentExpBonus > 0
-        ? baseExpPerRun * (1 + currentExpBonus / 100)
-        : baseExpPerRun;
-
+    const expPerRun = applyD2RExpBonuses(baseExpPerRun, currentLevel);
     totalRuns += expNeededForNextLevel / expPerRun;
     currentLevel++;
   }
@@ -517,7 +785,7 @@ function calculate() {
       totalRuns = calculateD4Experience(
         validation.from,
         validation.to,
-        expPerDungeon
+        expPerDungeon,
       );
     } else {
       const partySize =
@@ -525,7 +793,7 @@ function calculate() {
       totalRuns = calculateD2RExperience(
         validation.from,
         validation.to,
-        partySize
+        partySize,
       );
     }
 
@@ -560,7 +828,14 @@ function getCurrentState() {
   if (!isD4) {
     state.d2r = {
       partySize: document.getElementById("partySize").value,
+      playersInGame: document.getElementById("playersInGame").value,
+      liveExpLocation:
+        document.getElementById("liveExpLocation")?.value || "chaos",
+      liveExpFromLevel:
+        document.getElementById("liveExpFromLevel")?.value || "",
+      liveExpToLevel: document.getElementById("liveExpToLevel")?.value || "",
       anniBonus: document.getElementById("anniBonus").value,
+      ancJewelBonus: document.getElementById("ancJewelBonus").value,
       expShrine: document.getElementById("expShrine").checked,
       ondalsWisdom: document.getElementById("ondalsWisdom").checked,
     };
@@ -630,9 +905,34 @@ function restoreStateFromHash() {
 
     // Restore D2R specific values
     if (!isD4 && state.d2r) {
-      const { partySize, anniBonus, expShrine, ondalsWisdom } = state.d2r;
+      const {
+        partySize,
+        playersInGame,
+        liveExpLocation,
+        liveExpFromLevel,
+        liveExpToLevel,
+        anniBonus,
+        ancJewelBonus,
+        expShrine,
+        ondalsWisdom,
+      } = state.d2r;
       document.getElementById("partySize").value = partySize;
+      if (playersInGame != null) {
+        document.getElementById("playersInGame").value = playersInGame;
+      }
+      if (liveExpLocation != null) {
+        document.getElementById("liveExpLocation").value = liveExpLocation;
+      }
+      if (liveExpFromLevel != null) {
+        document.getElementById("liveExpFromLevel").value = liveExpFromLevel;
+      }
+      if (liveExpToLevel != null) {
+        document.getElementById("liveExpToLevel").value = liveExpToLevel;
+      }
       document.getElementById("anniBonus").value = anniBonus;
+      if (ancJewelBonus != null) {
+        document.getElementById("ancJewelBonus").value = ancJewelBonus;
+      }
       document.getElementById("expShrine").checked = expShrine;
       document.getElementById("ondalsWisdom").checked = ondalsWisdom;
     }
@@ -641,13 +941,13 @@ function restoreStateFromHash() {
     const partySizeContainer = document.getElementById("partySizeContainer");
     const d2rBonusContainer = document.getElementById("d2rBonusContainer");
     const d2rCheckboxContainer = document.getElementById(
-      "d2rCheckboxContainer"
+      "d2rCheckboxContainer",
     );
 
     if (partySizeContainer)
       partySizeContainer.style.display = isD4 ? "none" : "inline-block";
     if (d2rBonusContainer)
-      d2rBonusContainer.style.display = isD4 ? "none" : "inline-block";
+      d2rBonusContainer.style.display = isD4 ? "none" : "inline-flex";
     if (d2rCheckboxContainer)
       d2rCheckboxContainer.style.display = isD4 ? "none" : "flex";
 

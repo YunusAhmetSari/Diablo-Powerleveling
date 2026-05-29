@@ -170,6 +170,19 @@ td .extend.square.fill {
   box-shadow: 0 0 20px rgba(57, 255, 20, 0.1);
 }
 
+/* Anni + Anc Jewel: je field small wie Party Size, nebeneinander */
+#d2rBonusContainer {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+  width: fit-content;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .field label,
