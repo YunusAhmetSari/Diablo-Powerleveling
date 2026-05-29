@@ -880,6 +880,7 @@ function restoreStateFromHash() {
   if (!window.location.hash) {
     // Set default values for D4 (since it's checked by default)
     updatePresetValues(true, true);
+    initializeGameElements(isD4);
     switchRows(true);
     calculate();
     return;
